@@ -138,32 +138,40 @@ class PaymentService
         && $this->settingsService->getPaymentSettingsValue('novalnet_tariff_id') != '');
     }
 
- /**
-     * Show payment for allowed countries
-     *
-     * @param  object $basket
-     * @param string $allowedCountry
-     *
-     * @return bool
-     */
-    public function allowedCountries(Basket $basket, $allowedCountry)
-    {
-        $allowedCountry = str_replace(' ', '', strtoupper($allowedCountry));
-        $allowedCountryArray = explode(',', $allowedCountry);
-        try {
-            if(!is_null($basket) && $basket instanceof Basket && !empty($basket->customerInvoiceAddressId)) {
-                $billingAddressId = $basket->customerInvoiceAddressId;
-                $billingAddress = $this->paymentHelper->getCustomerAddress((int) $billingAddressId);
-                $country = $this->countryRepository->findIsoCode($billingAddress->countryId, 'iso_code_2');
-                if(!empty($billingAddress) && !empty($country) && in_array($country, $allowedCountryArray)) {
-                    return true;
-                }
-            }
-        } catch(\Exception $e) {
-            return false;
-        }
+/**
+ * Show payment for allowed countries
+ *
+ * @param Basket $basket
+ * @param mixed  $allowedCountry   // array of country IDs: ["1","2"] or [1,2]
+ *
+ * @return bool
+ */
+public function allowedCountries(Basket $basket, $allowedCountry): bool
+{
+    // Normalize allowed countries to INT IDs
+    $allowedCountries = [];
+    if (is_array($allowedCountry)) {
+        $allowedCountries = array_map('intval', $allowedCountry);
+    } else {
+        $allowedCountries = array_map('intval', explode(',', (string) $allowedCountry));
+    }
+
+    try {
+        // Get billing address
+        $billingAddress = $this->paymentHelper->getCustomerAddress((int) $basket->customerInvoiceAddressId);
+        // Customer country ID (INT)
+        $customerCountryId = (int) $billingAddress->country->id;
+        $isAllowed = in_array($customerCountryId, $allowedCountries, true);
+
+        return $isAllowed;
+
+    } catch (\Throwable $e) {
+        $this->getLogger(__METHOD__)->error('Allowed country check exception', [
+            'message' => $e->getMessage()
+        ]);
         return false;
     }
+}
 
     
 
